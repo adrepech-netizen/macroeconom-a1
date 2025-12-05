@@ -17,10 +17,9 @@
             display: flex; 
             flex-wrap: wrap; 
             padding: 10px; 
-            align-items: flex-start; /* Importante para que sticky funcione */
+            align-items: flex-start; 
         }
         
-        /* --- CAMBIOS PRINCIPALES AQUÍ --- */
         /* Panel de Controles "Pegajoso" */
         .controls { 
             flex: 1; 
@@ -32,12 +31,10 @@
             margin-right: 20px; 
             margin-bottom: 10px;
             
-            /* Hacemos que el panel se pegue */
-            position: -webkit-sticky; /* Para Safari */
+            /* Sticky Setup */
+            position: -webkit-sticky; 
             position: sticky;
-            top: 20px; /* Se queda a 20px del borde superior */
-            
-            /* Si la pantalla es baja, permitimos scroll dentro del panel */
+            top: 20px; 
             max-height: calc(100vh - 40px);
             overflow-y: auto;
             z-index: 1000;
@@ -50,34 +47,43 @@
         input[type=range] { width: 100%; cursor: pointer; }
         .val-display { float: right; color: #007bff; font-family: monospace; }
 
+        /* Panel de Resultados (Nuevo) */
+        .results-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e8f6f3; /* Verde muy claro */
+            border: 1px solid #a2d9ce;
+            border-radius: 8px;
+        }
+        .results-panel h4 { margin-top: 0; margin-bottom: 10px; color: #16a085; text-align: center; }
+        .res-item { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.95rem; }
+        .res-value { font-weight: bold; color: #2e4053; }
+        .res-sub { font-size: 0.8rem; color: #7f8c8d; font-style: italic;}
+
         /* Panel de Gráficos */
         .charts-area { flex: 3; display: flex; flex-wrap: wrap; gap: 15px; }
         .chart-box { background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); padding: 5px; flex: 1 1 45%; min-width: 300px; height: 350px; }
         .full-width { flex: 1 1 100%; height: 450px; }
 
-        /* Responsividad para móviles */
+        /* Responsividad */
         @media (max-width: 768px) {
             .container { flex-direction: column; padding: 0; }
             
             .controls { 
-                width: 100%; /* Ocupa todo el ancho */
-                box-sizing: border-box; /* Asegura que el padding no rompa el ancho */
+                width: 100%; 
+                box-sizing: border-box; 
                 margin-right: 0;
                 margin-bottom: 20px;
-                border-radius: 0 0 10px 10px; /* Redondear solo abajo */
-                
-                /* Ajuste Sticky para Móvil */
+                border-radius: 0 0 10px 10px; 
                 top: 0;
-                max-height: 35vh; /* Ocupa máximo el 35% de la pantalla vertical */
-                overflow-y: scroll; /* Scroll obligatorio si hay muchos controles */
+                max-height: 40vh; /* Un poco más alto para ver resultados */
+                overflow-y: scroll;
                 box-shadow: 0 5px 10px rgba(0,0,0,0.2);
                 border-top: 1px solid #ccc;
             }
 
             .chart-box { width: 100%; min-width: auto; margin: 5px; }
             .full-width { height: 350px; }
-            
-            /* Título más pequeño en móvil */
             h1 { font-size: 1.2rem; }
         }
     </style>
@@ -95,7 +101,7 @@
 <div class="container">
     <div class="controls">
         <h3>Parámetros</h3>
-        <p style="font-size:0.8rem; color:#666; margin-top:0;">Desliza para ver cambios en tiempo real.</p>
+        <p style="font-size:0.8rem; color:#666; margin-top:0;">Desliza para ver cambios.</p>
         
         <div class="control-group">
             <label>Gasto Gobierno (G) <span id="val-G" class="val-display">200</span></label>
@@ -131,6 +137,30 @@
             <label>Inversión Autónoma (Io) <span id="val-Io" class="val-display">150</span></label>
             <input type="range" id="slider-Io" min="50" max="300" step="10" value="150">
         </div>
+
+        <div class="results-panel">
+            <h4>Resultados de Equilibrio</h4>
+            
+            <div class="res-item">
+                <span>Mult. Simple [1/(1-c)]:</span>
+                <span id="res-simple-mult" class="res-value">0.00</span>
+            </div>
+            
+            <div class="res-item" style="border-bottom: 1px dashed #ccc; padding-bottom: 5px; margin-bottom: 10px;">
+                <span>Mult. Gasto (IS-LM):</span>
+                <span id="res-islm-mult" class="res-value">0.00</span>
+            </div>
+
+            <div class="res-item">
+                <span>Ingreso (Y):</span>
+                <span id="res-Y" class="res-value">0.00</span>
+            </div>
+            <div class="res-item">
+                <span>Tasa Interés (r):</span>
+                <span id="res-r" class="res-value">0.00%</span>
+            </div>
+        </div>
+
     </div>
 
     <div class="charts-area">
@@ -181,12 +211,28 @@
         // Equilibrio
         let A = Co - (c * T) + Io + G;
         let realM = M / P;
-        let numerator = h * A + b * realM;
+        
+        // Denominador común del sistema
         let denominator = h * (1 - c) + b * k;
+        
+        // Calculo de Y equilibrio
+        let numerator = h * A + b * realM;
         let eq_Y = numerator / denominator;
+        
+        // Calculo de r equilibrio
         let eq_r = (k / h) * eq_Y - (1 / h) * realM;
 
-        return { yValues, is_rValues, lm_rValues, eq_Y, eq_r, A };
+        // --- CÁLCULO DE MULTIPLICADORES ---
+        
+        // 1. Multiplicador Simple (Keynesiano sin mercado de dinero)
+        // K = 1 / (1 - c)
+        let simpleMultiplier = 1 / (1 - c);
+
+        // 2. Multiplicador del Gasto IS-LM (Con efecto desplazamiento)
+        // Multiplicador = h / (h(1-c) + bk)
+        let islmMultiplier = h / denominator;
+
+        return { yValues, is_rValues, lm_rValues, eq_Y, eq_r, A, simpleMultiplier, islmMultiplier };
     }
 
     function calculateSubPlots(eq_Y, eq_r, A) {
@@ -207,7 +253,14 @@
         return { rangeY, C_values, rangeR, I_values, G_values, DA_values, Y_Ref_values };
     }
 
-    // Configuración común para gráficos (Layout)
+    // Actualizar Panel de Resultados Numéricos
+    function updateResultsPanel(eq_Y, eq_r, islmMultiplier, simpleMultiplier) {
+        document.getElementById('res-simple-mult').innerText = simpleMultiplier.toFixed(2);
+        document.getElementById('res-islm-mult').innerText = islmMultiplier.toFixed(2);
+        document.getElementById('res-Y').innerText = eq_Y.toFixed(2);
+        document.getElementById('res-r').innerText = eq_r.toFixed(2) + "%";
+    }
+
     const commonLayout = {
         margin: {t: 30, b: 30, l: 40, r: 10},
         autosize: true
@@ -216,6 +269,9 @@
     function plotCharts() {
         let data = calculateData();
         let subData = calculateSubPlots(data.eq_Y, data.eq_r, data.A);
+
+        // Actualizar valores numéricos en el panel
+        updateResultsPanel(data.eq_Y, data.eq_r, data.islmMultiplier, data.simpleMultiplier);
 
         // 1. IS-LM
         let traceIS = { x: data.yValues, y: data.is_rValues, mode: 'lines', name: 'IS', line: {color: 'blue'} };
